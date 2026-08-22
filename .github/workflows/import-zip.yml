@@ -1,0 +1,156 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Runs a single command using the runners shell
+      - name: Run a one-line script
+        run: echo Hello, world!
+
+      # Runs a set of commands using the runners shell
+      - name: Run a multi-line script
+        run: |
+          echo Add other actions to build,
+          echo test, and deploy your project.
+name: Import uploaded ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  import-and-deploy:
+    if: github.actor != 'github-actions[bot]'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Find exactly one ZIP
+        id: zip
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            mapfile -t zips < <(find . -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort)
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            mapfile -t zips < <(git diff --name-only --diff-filter=AM HEAD^ HEAD -- '*.zip')
+          else
+            mapfile -t zips < <(find . -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort)
+          fi
+
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one new ZIP, found ${#zips[@]}."
+            printf '%s\n' "${zips[@]:-}"
+            exit 1
+          fi
+
+          echo "file=${zips[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate and unpack
+        shell: bash
+        env:
+          ZIPFILE: ${{ steps.zip.outputs.file }}
+        run: |
+          set -euo pipefail
+
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          entries="$(unzip -Z1 "$ZIPFILE")"
+
+          if printf '%s\n' "$entries" | grep -Eq '(^|/)\.\.(/|$)|(^|/)\.git(/|$)'; then
+            echo "::error::Unsafe ZIP path detected."
+            exit 1
+          fi
+
+          if printf '%s\n' "$entries" | grep -Eqi '(^|/)\.env($|/)|\.pem$|\.key$|(^|/)id_rsa($|\.)'; then
+            echo "::error::Potential secret file detected in ZIP."
+            exit 1
+          fi
+
+          unzip -q "$ZIPFILE" -d "$tmp"
+
+          # The ZIP represents the repository root. Existing workflows are
+          # administrative/bootstrap files and are never replaced automatically.
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/workflows/' \
+            --exclude='*.zip' \
+            "$tmp"/ ./
+
+          rm -f ./*.zip
+
+      - name: Commit imported release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
+            echo "::error::Safety check: automated ZIP import must not modify .github/workflows/."
+            exit 1
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No release changes to commit."
+          else
+            git commit -m "Import ZIP release"
+            git push
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+
+      - name: Deploy imported release
+        id: deployment
+        uses: actions/deploy-pages@v4
