@@ -207,7 +207,7 @@ Grocy-Versionen können einzelne Felder/Optionen erweitern. Die PWA v1 ist auf d
 - Update-Button wird während der Aktivierung deaktiviert; nach `controllerchange` wird der Hinweis sofort ausgeblendet.
 - Versionsabgleich zwischen App und Service Worker verhindert den dauerhaft sichtbaren falschen Update-Hinweis auf iOS/Safari.
 
-## Neuer GitHub-Pages-Repository-Start (v5)
+## Neuer GitHub-Pages-Repository-Start (v6)
 
 Dieses Release enthält die beiden Bootstrap-Workflows unter `.github/workflows/`.
 Bei einem **neuen** Repository muss der Inhalt dieses ZIPs einmalig entpackt und als

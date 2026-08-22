@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v5';
+const APP_VERSION = 'v6';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
