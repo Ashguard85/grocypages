@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v9';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -223,6 +223,7 @@ function resetSwipeCard(card){
   if(!card)return;
   card.style.transform='';
   card.classList.remove('swiping');
+  card.closest('.swipe-row')?.classList.remove('swiping');
 }
 
 function runSwipeAction(productId,direction){
@@ -255,6 +256,7 @@ $('#stockList').addEventListener('pointermove',e=>{
   e.preventDefault();
   g.dx=Math.max(-SWIPE_LIMIT,Math.min(SWIPE_LIMIT,dx));
   g.card.classList.add('swiping');
+  g.card.closest('.swipe-row')?.classList.add('swiping');
   g.card.style.transform=`translateX(${g.dx}px)`;
 });
 
