@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v8';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -130,10 +130,11 @@ function fillProducts(){$('#productOptions').innerHTML=state.products.map(p=>`<o
 function renderStock(){
   const q=$('#stockSearch').value.trim().toLowerCase(); const now=today();
   let rows=state.products.filter(p=>n(p.active)!==0).map(p=>state.stock.find(r=>n(r.product_id)===n(p.id))||{product_id:p.id,product:p,amount:0,amount_opened:0,best_before_date:''}).filter(r=>{const p=stockProduct(r);return !q||p.name.toLowerCase().includes(q)||String(p.id)===q});
+  if(state.stockFilter==='instock')rows=rows.filter(r=>n(r.amount)>0);
   if(state.stockFilter==='low')rows=rows.filter(r=>n(r.amount)<n(stockProduct(r).min_stock_amount));
   if(state.stockFilter==='due')rows=rows.filter(r=>r.best_before_date&&r.best_before_date<=now);
   rows.sort((a,b)=>stockProduct(a).name.localeCompare(stockProduct(b).name,'de'));
-  $('#stockList').innerHTML=rows.length?rows.map(r=>{const p=stockProduct(r),amt=n(r.amount),min=n(p.min_stock_amount),cls=amt===0&&min>0?'critical':amt<min?'low':(r.best_before_date&&r.best_before_date<=now?'due':'');return `<button class="card product-card ${cls}" data-product-id="${p.id}" style="text-align:left;width:100%"><div class="product-icon">${iconFor(p.name)}</div><div><div class="product-title">${esc(p.name)}</div><div class="product-sub">${esc(locationFor(p,r))}${r.best_before_date?` · MHD ${esc(r.best_before_date)}`:''}</div></div><div class="qty">${fmt(amt)} ${esc(r.quantity_unit_stock||unitFor(p))}<small>${min?`Min. ${fmt(min)}`:''}</small></div></button>`}).join(''):'<div class="panel muted">Keine passenden Artikel.</div>';
+  $('#stockList').innerHTML=rows.length?rows.map(r=>{const p=stockProduct(r),amt=n(r.amount),min=n(p.min_stock_amount),cls=amt===0&&min>0?'critical':amt<min?'low':(r.best_before_date&&r.best_before_date<=now?'due':'');return `<div class="swipe-row" data-swipe-product="${p.id}"><div class="swipe-action swipe-action-right">＋ Einlagern</div><div class="swipe-action swipe-action-left">Verbrauchen −</div><button class="card product-card ${cls}" data-product-id="${p.id}" style="text-align:left;width:100%"><div class="product-icon">${iconFor(p.name)}</div><div><div class="product-title">${esc(p.name)}</div><div class="product-sub">${esc(locationFor(p,r))}${r.best_before_date?` · MHD ${esc(r.best_before_date)}`:''}</div></div><div class="qty">${fmt(amt)} ${esc(r.quantity_unit_stock||unitFor(p))}<small>${min?`Min. ${fmt(min)}`:''}</small></div></button></div>`}).join(''):'<div class="panel muted">Keine passenden Artikel.</div>';
 }
 function iconFor(name){const x=name.toLowerCase();if(x.includes('milch'))return '🥛';if(x.includes('brot'))return '🍞';if(x.includes('nudel')||x.includes('spaghetti'))return '🍝';if(x.includes('kaffee'))return '☕';if(x.includes('ei'))return '🥚';if(x.includes('apfel'))return '🍎';return '📦'}
 
@@ -184,10 +185,11 @@ async function handleSheetClick(e){
 }
 
 document.addEventListener('click',async e=>{try{
+  if(e.target.closest('#closeSheetBtn')){const sheet=$('#sheet');if(sheet.open)sheet.close('cancel');return}
   const navBtn=e.target.closest('[data-nav]');if(navBtn){nav(navBtn.dataset.nav);return}
   const filter=e.target.closest('[data-filter]');if(filter){state.stockFilter=filter.dataset.filter;$$('[data-filter]').forEach(b=>b.classList.toggle('active',b===filter));renderStock();return}
   const st=e.target.closest('[data-shopping-tab]');if(st){state.shoppingTab=st.dataset.shoppingTab;$$('[data-shopping-tab]').forEach(b=>b.classList.toggle('active',b===st));renderShopping();return}
-  const pc=e.target.closest('[data-product-id]');if(pc){selectProduct(pc.dataset.productId);return}
+  const pc=e.target.closest('[data-product-id]');if(pc){if(Date.now()<suppressProductClickUntil)return;selectProduct(pc.dataset.productId);return}
   const open=e.target.closest('[data-open-sheet]');if(open){({purchase:openPurchase,transfer:openTransfer,product:openProduct,settings:openSettings,backup:openBackup,api:openApi}[open.dataset.openSheet])();return}
   if(e.target.id==='quickAddBtn'){if($('.view.active').dataset.view==='shopping')showSheet('Zur Einkaufsliste',`<div class="form-stack">${productSelect()}<label>Menge<input name="amount" type="number" value="1" min="0.001" step="0.001"></label><button type="button" class="primary-button" id="quickShoppingAdd">Hinzufügen</button></div>`);else openPurchase();return}
   if(e.target.id==='quickShoppingAdd'){const p=await provider.resolveProduct($('[name=product]',$('#sheetBody')).value);if(!p)throw new Error('Artikel nicht gefunden.');await provider.addShopping(p.id,$('[name=amount]',$('#sheetBody')).value);$('#sheet').close();await refreshAll();toast('Hinzugefügt');return}
@@ -201,12 +203,75 @@ document.addEventListener('click',async e=>{try{
   if($('#sheet').open)await handleSheetClick(e)
 }catch(err){toast(err.message||String(err))}});
 
+const sheetDialog=$('#sheet');
+sheetDialog.addEventListener('cancel',()=>{if(sheetDialog.open)sheetDialog.close('cancel')});
+sheetDialog.addEventListener('click',e=>{if(e.target===sheetDialog&&sheetDialog.open)sheetDialog.close('cancel')});
+
 document.addEventListener('change',async e=>{try{
   if(e.target.id==='modeSelect'){$('#serverSettings').hidden=e.target.value!=='server'}
   if(e.target.id==='editProductSelect'){const id=n(e.target.value),p=productById(id);$('#deleteProduct').hidden=!id;$('#editName').value=p?.name||'';$('#editMin').value=p?.min_stock_amount||0;$('#editBarcode').value=p?.barcode||'';if(p?.location_id)$('#edit_location').value=p.location_id;if(p?.qu_id_stock)$('#editUnit').value=p.qu_id_stock}
   if(e.target.matches('[data-shop-amount]')){await provider.updateShopping(n(e.target.dataset.shopAmount),{amount:n(e.target.value)});await refreshAll()}
 }catch(err){toast(err.message)}});
 $('#stockSearch').addEventListener('input',renderStock);$('#shoppingSearch').addEventListener('input',renderShopping);
+
+let swipeGesture=null;
+let suppressProductClickUntil=0;
+const SWIPE_TRIGGER=58;
+const SWIPE_LIMIT=94;
+
+function resetSwipeCard(card){
+  if(!card)return;
+  card.style.transform='';
+  card.classList.remove('swiping');
+}
+
+function runSwipeAction(productId,direction){
+  const p=productById(productId);
+  if(!p)return;
+  if(direction==='right'){
+    openPurchase(p.name);
+    toast('Einlagern');
+  }else{
+    nav('consume');
+    $('#consumeProduct').value=p.name;
+    $('#consumeAmount').focus({preventScroll:true});
+    toast('Verbrauchen');
+  }
+}
+
+$('#stockList').addEventListener('pointerdown',e=>{
+  const card=e.target.closest('.product-card');
+  if(!card || e.pointerType==='mouse' && e.button!==0)return;
+  swipeGesture={card,id:n(card.dataset.productId),pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,dx:0,locked:null};
+  card.setPointerCapture?.(e.pointerId);
+});
+
+$('#stockList').addEventListener('pointermove',e=>{
+  const g=swipeGesture;
+  if(!g || e.pointerId!==g.pointerId)return;
+  const dx=e.clientX-g.startX,dy=e.clientY-g.startY;
+  if(g.locked===null && (Math.abs(dx)>7 || Math.abs(dy)>7))g.locked=Math.abs(dx)>Math.abs(dy)*1.15?'x':'y';
+  if(g.locked!=='x')return;
+  e.preventDefault();
+  g.dx=Math.max(-SWIPE_LIMIT,Math.min(SWIPE_LIMIT,dx));
+  g.card.classList.add('swiping');
+  g.card.style.transform=`translateX(${g.dx}px)`;
+});
+
+function finishSwipe(e){
+  const g=swipeGesture;
+  if(!g || (e.pointerId!==undefined && e.pointerId!==g.pointerId))return;
+  swipeGesture=null;
+  const triggered=g.locked==='x' && Math.abs(g.dx)>=SWIPE_TRIGGER;
+  resetSwipeCard(g.card);
+  if(triggered){
+    suppressProductClickUntil=Date.now()+500;
+    runSwipeAction(g.id,g.dx>0?'right':'left');
+  }
+}
+$('#stockList').addEventListener('pointerup',finishSwipe);
+$('#stockList').addEventListener('pointercancel',finishSwipe);
+
 
 async function scanBarcode(targetId){
   if(!('BarcodeDetector'in window)){toast('Kamera-Barcodescanner wird auf diesem Browser nicht unterstützt. Barcode kann manuell eingegeben werden.');document.getElementById(targetId).focus();return}

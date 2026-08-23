@@ -32,6 +32,7 @@
         </div>
         <div class="segmented" id="stockFilters">
           <button class="active" data-filter="all">Alle</button>
+          <button data-filter="instock">Nur vorrätige</button>
           <button data-filter="low">Niedrig</button>
           <button data-filter="due">Fällig</button>
         </div>
@@ -106,7 +107,7 @@
   <dialog id="sheet" class="sheet">
     <form method="dialog" class="sheet-frame">
       <div class="sheet-handle"></div>
-      <div class="sheet-head"><h2 id="sheetTitle">Aktion</h2><button class="icon-button" value="cancel" aria-label="Schließen">×</button></div>
+      <div class="sheet-head"><h2 id="sheetTitle">Aktion</h2><button class="icon-button" type="button" id="closeSheetBtn" aria-label="Schließen">×</button></div>
       <div id="sheetBody" class="sheet-body"></div>
     </form>
   </dialog>

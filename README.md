@@ -207,7 +207,7 @@ Grocy-Versionen können einzelne Felder/Optionen erweitern. Die PWA v1 ist auf d
 - Update-Button wird während der Aktivierung deaktiviert; nach `controllerchange` wird der Hinweis sofort ausgeblendet.
 - Versionsabgleich zwischen App und Service Worker verhindert den dauerhaft sichtbaren falschen Update-Hinweis auf iOS/Safari.
 
-## Neuer GitHub-Pages-Repository-Start (v6)
+## Neuer GitHub-Pages-Repository-Start (v8)
 
 Dieses Release enthält die beiden Bootstrap-Workflows unter `.github/workflows/`.
 Bei einem **neuen** Repository muss der Inhalt dieses ZIPs einmalig entpackt und als
@@ -231,3 +231,8 @@ Der Commit des ZIP-Importers wird mit `GITHUB_TOKEN` erzeugt. GitHub startet dar
 absichtlich keinen weiteren `push`-Workflow. Darum deployt `Import uploaded ZIP` das
 importierte Release selbst. `Deploy GitHub Pages` ist für normale direkte Änderungen
 im Repository zuständig.
+
+
+## v8
+- Artikelansicht: horizontal wischen. Nach rechts = Einlagern, nach links = Verbrauchen. Vertikales Scrollen bleibt aktiv.
+- Neuer Filter **Nur vorrätige** (Bestand > 0).
