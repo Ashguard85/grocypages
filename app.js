@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v10';
+const APP_VERSION = 'v11';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -193,7 +193,7 @@ document.addEventListener('click',async e=>{try{
   const open=e.target.closest('[data-open-sheet]');if(open){({purchase:openPurchase,transfer:openTransfer,product:openProduct,settings:openSettings,backup:openBackup,api:openApi}[open.dataset.openSheet])();return}
   if(e.target.id==='quickAddBtn'){if($('.view.active').dataset.view==='shopping')showSheet('Zur Einkaufsliste',`<div class="form-stack">${productSelect()}<label>Menge<input name="amount" type="number" value="1" min="0.001" step="0.001"></label><button type="button" class="primary-button" id="quickShoppingAdd">Hinzufügen</button></div>`);else openPurchase();return}
   if(e.target.id==='quickShoppingAdd'){const p=await provider.resolveProduct($('[name=product]',$('#sheetBody')).value);if(!p)throw new Error('Artikel nicht gefunden.');await provider.addShopping(p.id,$('[name=amount]',$('#sheetBody')).value);$('#sheet').close();await refreshAll();toast('Hinzugefügt');return}
-  if(e.target.id==='consumeBtn'){const p=await provider.resolveProduct($('#consumeProduct').value);if(!p)throw new Error('Artikel nicht gefunden.');const amount=$('#consumeAmount').value,mode=$('#consumeMode').value;if(mode==='open')await provider.open(p.id,amount);else await provider.consume(p.id,amount,mode==='spoiled');await refreshAll();toast('Buchung gespeichert');return}
+  if(e.target.id==='consumeBtn'){const btn=e.target;if(btn.disabled)return;btn.disabled=true;const oldText=btn.textContent;btn.textContent='Buche …';try{const p=await provider.resolveProduct($('#consumeProduct').value);if(!p)throw new Error('Artikel nicht gefunden.');const amount=$('#consumeAmount').value,mode=$('#consumeMode').value;if(mode==='open')await provider.open(p.id,amount);else await provider.consume(p.id,amount,mode==='spoiled');await refreshAll();toast('Buchung gespeichert')}finally{btn.disabled=false;btn.textContent=oldText}return}
   if(e.target.id==='refreshJournal'){state.journal=await provider.journal();renderJournal();return}
   if(e.target.id==='saveInventoryBtn'){const changed=$$('[data-inventory-id]').map(i=>({id:n(i.dataset.inventoryId),newAmount:n(i.value),old:n(state.stock.find(r=>n(r.product_id)===n(i.dataset.inventoryId))?.amount)})).filter(x=>x.newAmount!==x.old);if(!changed.length){toast('Keine Änderungen');return}if(!confirm(`${changed.length} Bestände aktualisieren?`))return;for(const x of changed)await provider.inventory(x.id,x.newAmount);await refreshAll();toast('Inventur gespeichert');return}
   const c=e.target.closest('[data-shop-check]');if(c){const it=state.shopping.find(x=>n(x.id)===n(c.dataset.shopCheck));if(state.mode==='server'){if(c.checked&&it){await provider.removeShoppingProduct(it.product_id,it.amount,it.shopping_list_id||1);await refreshAll();toast('Von Einkaufsliste entfernt')}}else{await provider.updateShopping(n(c.dataset.shopCheck),{done:c.checked?1:0});await refreshAll()}return}
@@ -230,15 +230,18 @@ function resetSwipeCard(card){
 function runSwipeAction(productId,direction){
   const p=productById(productId);
   if(!p)return;
-  if(direction==='right'){
-    openPurchase(p.name);
-    toast('Einlagern');
-  }else{
-    nav('consume');
-    $('#consumeProduct').value=p.name;
-    $('#consumeAmount').focus({preventScroll:true});
-    toast('Verbrauchen');
-  }
+  // iOS Safari can carry the pointer/click sequence into the newly shown view.
+  // Defer navigation until the swipe event has fully finished and don't autofocus.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(direction==='right'){
+      openPurchase(p.name);
+      toast('Einlagern');
+    }else{
+      nav('consume');
+      $('#consumeProduct').value=p.name;
+      toast('Verbrauchen');
+    }
+  }));
 }
 
 $('#stockList').addEventListener('pointerdown',e=>{
@@ -266,6 +269,7 @@ function finishSwipe(e){
   const g=swipeGesture;
   if(!g || (e.pointerId!==undefined && e.pointerId!==g.pointerId))return;
   swipeGesture=null;
+  try{ if(g.card.hasPointerCapture?.(g.pointerId)) g.card.releasePointerCapture(g.pointerId); }catch{}
   const triggered=g.locked==='x' && Math.abs(g.dx)>=SWIPE_TRIGGER;
   resetSwipeCard(g.card);
   if(triggered){
