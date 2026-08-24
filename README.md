@@ -207,7 +207,7 @@ Grocy-Versionen können einzelne Felder/Optionen erweitern. Die PWA v1 ist auf d
 - Update-Button wird während der Aktivierung deaktiviert; nach `controllerchange` wird der Hinweis sofort ausgeblendet.
 - Versionsabgleich zwischen App und Service Worker verhindert den dauerhaft sichtbaren falschen Update-Hinweis auf iOS/Safari.
 
-## Neuer GitHub-Pages-Repository-Start (v9)
+## Neuer GitHub-Pages-Repository-Start (v10)
 
 Dieses Release enthält die beiden Bootstrap-Workflows unter `.github/workflows/`.
 Bei einem **neuen** Repository muss der Inhalt dieses ZIPs einmalig entpackt und als
@@ -243,3 +243,10 @@ im Repository zuständig.
 - Swipe-Karten auf iOS auf volle Breite stabilisiert.
 - Swipe-Aktionsflächen sind im Ruhezustand unsichtbar und erscheinen nur während einer horizontalen Wischgeste.
 - Lange Artikelnamen werden sauber gekürzt, ohne die Kartenbreite zu verändern.
+
+
+## v10
+
+- Swipe-Weg in der Artikelansicht auf bis zu ca. 52 % der Kartenbreite bzw. 190 px erweitert.
+- Aktionsbeschriftungen „Einlagern“ und „Verbrauchen“ sind dadurch beim Wischen vollständig sichtbar.
+- Auslöseschwelle bleibt deutlich kleiner als der maximale Reveal-Weg, damit die Aktion auf dem iPhone angenehm bedienbar bleibt.

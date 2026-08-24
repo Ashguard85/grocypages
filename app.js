@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v9';
+const APP_VERSION = 'v10';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -216,8 +216,9 @@ $('#stockSearch').addEventListener('input',renderStock);$('#shoppingSearch').add
 
 let swipeGesture=null;
 let suppressProductClickUntil=0;
-const SWIPE_TRIGGER=58;
-const SWIPE_LIMIT=94;
+const SWIPE_TRIGGER=72;
+const SWIPE_MAX_PX=190;
+const SWIPE_MAX_RATIO=0.52;
 
 function resetSwipeCard(card){
   if(!card)return;
@@ -243,7 +244,8 @@ function runSwipeAction(productId,direction){
 $('#stockList').addEventListener('pointerdown',e=>{
   const card=e.target.closest('.product-card');
   if(!card || e.pointerType==='mouse' && e.button!==0)return;
-  swipeGesture={card,id:n(card.dataset.productId),pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,dx:0,locked:null};
+  const limit=Math.min(SWIPE_MAX_PX,Math.max(128,card.getBoundingClientRect().width*SWIPE_MAX_RATIO));
+  swipeGesture={card,id:n(card.dataset.productId),pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,dx:0,locked:null,limit};
   card.setPointerCapture?.(e.pointerId);
 });
 
@@ -254,7 +256,7 @@ $('#stockList').addEventListener('pointermove',e=>{
   if(g.locked===null && (Math.abs(dx)>7 || Math.abs(dy)>7))g.locked=Math.abs(dx)>Math.abs(dy)*1.15?'x':'y';
   if(g.locked!=='x')return;
   e.preventDefault();
-  g.dx=Math.max(-SWIPE_LIMIT,Math.min(SWIPE_LIMIT,dx));
+  g.dx=Math.max(-g.limit,Math.min(g.limit,dx));
   g.card.classList.add('swiping');
   g.card.closest('.swipe-row')?.classList.add('swiping');
   g.card.style.transform=`translateX(${g.dx}px)`;

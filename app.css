@@ -2,5 +2,5 @@
 
 .details-stack{margin-top:10px}.raw-result{white-space:pre-wrap;overflow:auto;font-size:12px}.scanner-video{width:100%;border-radius:12px}
 
-/* v8: iPhone swipe actions on stock cards */
+/* v10: iPhone swipe actions on stock cards; extended reveal distance */
 .swipe-row{position:relative;overflow:hidden;border-radius:14px;isolation:isolate;width:100%;min-width:0}.swipe-row .product-card{position:relative;z-index:2;display:grid;width:100%!important;min-width:0;max-width:100%;transition:transform .18s ease;touch-action:pan-y;-webkit-user-select:none;user-select:none}.swipe-row .product-card.swiping{transition:none}.swipe-row .product-card>div:nth-child(2){min-width:0}.swipe-row .product-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.swipe-action{position:absolute;inset-block:0;z-index:1;display:flex;align-items:center;font-size:13px;font-weight:800;color:#fff;padding:0 14px;pointer-events:none;opacity:0;transition:opacity .08s linear}.swipe-row.swiping .swipe-action{opacity:1}.swipe-action-right{left:0;justify-content:flex-start;background:var(--green);width:50%}.swipe-action-left{right:0;justify-content:flex-end;background:var(--amber);width:50%}
