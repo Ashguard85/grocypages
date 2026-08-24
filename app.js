@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -134,7 +134,7 @@ function renderStock(){
   if(state.stockFilter==='low')rows=rows.filter(r=>n(r.amount)<n(stockProduct(r).min_stock_amount));
   if(state.stockFilter==='due')rows=rows.filter(r=>r.best_before_date&&r.best_before_date<=now);
   rows.sort((a,b)=>stockProduct(a).name.localeCompare(stockProduct(b).name,'de'));
-  $('#stockList').innerHTML=rows.length?rows.map(r=>{const p=stockProduct(r),amt=n(r.amount),min=n(p.min_stock_amount),cls=amt===0&&min>0?'critical':amt<min?'low':(r.best_before_date&&r.best_before_date<=now?'due':'');return `<div class="swipe-row" data-swipe-product="${p.id}"><div class="swipe-action swipe-action-right">＋ Einlagern</div><div class="swipe-action swipe-action-left">Verbrauchen −</div><button class="card product-card ${cls}" data-product-id="${p.id}" style="text-align:left;width:100%"><div class="product-icon">${iconFor(p.name)}</div><div><div class="product-title">${esc(p.name)}</div><div class="product-sub">${esc(locationFor(p,r))}${r.best_before_date?` · MHD ${esc(r.best_before_date)}`:''}</div></div><div class="qty">${fmt(amt)} ${esc(r.quantity_unit_stock||unitFor(p))}<small>${min?`Min. ${fmt(min)}`:''}</small></div></button></div>`}).join(''):'<div class="panel muted">Keine passenden Artikel.</div>';
+  $('#stockList').innerHTML=rows.length?rows.map(r=>{const p=stockProduct(r),amt=n(r.amount),min=n(p.min_stock_amount),cls=amt===0&&min>0?'critical':amt<min?'low':(r.best_before_date&&r.best_before_date<=now?'due':'');return `<div class="swipe-row" data-swipe-product="${p.id}"><div class="swipe-action swipe-action-right">＋ Einlagern</div><div class="swipe-action swipe-action-left">Verbrauchen −</div><div class="card product-card ${cls}" data-product-id="${p.id}" role="button" tabindex="0" style="text-align:left;width:100%"><div class="product-icon">${iconFor(p.name)}</div><div><div class="product-title">${esc(p.name)}</div><div class="product-sub">${esc(locationFor(p,r))}${r.best_before_date?` · MHD ${esc(r.best_before_date)}`:''}</div></div><div class="qty">${fmt(amt)} ${esc(r.quantity_unit_stock||unitFor(p))}<small>${min?`Min. ${fmt(min)}`:''}</small></div></div></div>`}).join(''):'<div class="panel muted">Keine passenden Artikel.</div>';
 }
 function iconFor(name){const x=name.toLowerCase();if(x.includes('milch'))return '🥛';if(x.includes('brot'))return '🍞';if(x.includes('nudel')||x.includes('spaghetti'))return '🍝';if(x.includes('kaffee'))return '☕';if(x.includes('ei'))return '🥚';if(x.includes('apfel'))return '🍎';return '📦'}
 
@@ -203,6 +203,19 @@ document.addEventListener('click',async e=>{try{
   if($('#sheet').open)await handleSheetClick(e)
 }catch(err){toast(err.message||String(err))}});
 
+// iOS: make the booking button react to the first deliberate tap after a swipe.
+// Prevent Safari from using that tap only to move focus/clear the previous touch target.
+const consumeButton=$('#consumeBtn');
+consumeButton.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch') e.preventDefault();
+});
+consumeButton.addEventListener('pointerup',e=>{
+  if(e.pointerType!=='touch' || consumeButton.disabled || postSwipeBusy)return;
+  e.preventDefault();
+  // Dispatch one clean click from the completed touch. The normal delegated handler does the booking.
+  consumeButton.click();
+});
+
 const sheetDialog=$('#sheet');
 sheetDialog.addEventListener('cancel',()=>{if(sheetDialog.open)sheetDialog.close('cancel')});
 sheetDialog.addEventListener('click',e=>{if(e.target===sheetDialog&&sheetDialog.open)sheetDialog.close('cancel')});
@@ -213,6 +226,14 @@ document.addEventListener('change',async e=>{try{
   if(e.target.matches('[data-shop-amount]')){await provider.updateShopping(n(e.target.dataset.shopAmount),{amount:n(e.target.value)});await refreshAll()}
 }catch(err){toast(err.message)}});
 $('#stockSearch').addEventListener('input',renderStock);$('#shoppingSearch').addEventListener('input',renderShopping);
+$('#stockList').addEventListener('keydown',e=>{
+  const card=e.target.closest('[data-product-id]');
+  if(card && (e.key==='Enter' || e.key===' ')){
+    e.preventDefault();
+    selectProduct(card.dataset.productId);
+  }
+});
+
 
 let swipeGesture=null;
 let suppressProductClickUntil=0;
@@ -227,21 +248,29 @@ function resetSwipeCard(card){
   card.closest('.swipe-row')?.classList.remove('swiping');
 }
 
+let postSwipeBusy=false;
 function runSwipeAction(productId,direction){
   const p=productById(productId);
   if(!p)return;
-  // iOS Safari can carry the pointer/click sequence into the newly shown view.
-  // Defer navigation until the swipe event has fully finished and don't autofocus.
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  postSwipeBusy=true;
+  // iOS may keep the touch target/focus state of the swiped element alive briefly.
+  // Wait until the complete pointer/click sequence is over, clear focus, then change view.
+  setTimeout(()=>{
+    try{document.activeElement?.blur?.()}catch{}
     if(direction==='right'){
       openPurchase(p.name);
       toast('Einlagern');
     }else{
       nav('consume');
       $('#consumeProduct').value=p.name;
+      $('#consumeAmount').value='1';
+      // Force a new hit-test/layout frame before accepting the next tap.
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{postSwipeBusy=false;}));
       toast('Verbrauchen');
+      return;
     }
-  }));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{postSwipeBusy=false;}));
+  },90);
 }
 
 $('#stockList').addEventListener('pointerdown',e=>{
