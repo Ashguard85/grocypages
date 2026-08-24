@@ -260,3 +260,8 @@ im Repository zuständig.
 
 ## v12 – iOS Swipe → Buchen
 Die Artikelkarte ist beim Wischen kein natives Button-Element mehr. Dadurch bleibt nach der Geste kein Safari-Touch/Fokuszustand hängen. Der Verbrauchsbutton verarbeitet Touch über einen sauberen Pointer-up-Pfad, damit der erste bewusste Tipp direkt bucht.
+
+
+## v13 – Lagerstand bei Abbuchungen
+
+In der Verbrauchsansicht wird für den ausgewählten Artikel der aktuelle Lagerstand inklusive Bestandseinheit angezeigt. Das gilt auch beim Öffnen der Verbrauchsansicht per Swipe. Nach einer erfolgreichen Abbuchung wird der neue Lagerstand sofort aus den frisch geladenen Grocy-Daten angezeigt und zusätzlich in der Erfolgsmeldung genannt.

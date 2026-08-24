@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='grocy-article-pwa-v12';
-const SW_VERSION='v12';
+const CACHE='grocy-article-pwa-v13';
+const SW_VERSION='v13';
 const SHELL=['./','./index.html','./app.js','./app.css','./manifest.webmanifest','./offline.html','./icons/icon-192.png','./icons/icon-512.png','./icons/maskable-512.png','./icons/apple-touch-icon.png','./icons/favicon-32.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('grocy-article-pwa-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));

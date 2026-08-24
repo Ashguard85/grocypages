@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
 const BACKUP_FORMAT = 'grocy-article-pwa-backup';
 const DB_NAME = 'grocy-article-pwa';
 const DB_VERSION = 1;
@@ -117,7 +117,7 @@ async function refreshAll(){
   try{
     setProvider(); if(provider.init) await provider.init();
     [state.products,state.stock,state.shopping,state.locations,state.units,state.journal]=await Promise.all([provider.products(),provider.stock(),provider.shopping(),provider.locations(),provider.units(),provider.journal()]);
-    fillProducts();renderStock();renderShopping();renderInventory();renderJournal();
+    fillProducts();renderStock();renderShopping();renderInventory();renderJournal();updateConsumeStockFromInput();
   }catch(e){toast(e.message); renderError(e.message)}
 }
 function renderError(msg){const active=$('.view.active .card-list');if(active) active.innerHTML=`<div class="error-box">${esc(msg)}</div>`}
@@ -126,6 +126,22 @@ function stockProduct(row){return row.product||productById(row.product_id)||{id:
 function unitFor(p){const u=state.units.find(x=>n(x.id)===n(p.qu_id_stock));return u?.name||u?.name_plural||''}
 function locationFor(p,row){return row?.location_name||state.locations.find(x=>n(x.id)===n(p.location_id))?.name||''}
 function fillProducts(){$('#productOptions').innerHTML=state.products.map(p=>`<option value="${esc(p.name)}"></option>`).join('')}
+
+function stockForProduct(productId){return state.stock.find(r=>n(r.product_id)===n(productId))||{product_id:productId,amount:0,amount_opened:0}}
+function setConsumeStockInfo(product){
+  const el=$('#consumeStockInfo'); if(!el)return;
+  if(!product){el.textContent='Artikel auswählen, um den aktuellen Lagerstand zu sehen.';return}
+  const r=stockForProduct(product.id);
+  const unit=r.quantity_unit_stock||unitFor(product);
+  el.innerHTML=`Aktueller Lagerstand: <strong>${fmt(r.amount)}${unit?' '+esc(unit):''}</strong>${n(r.amount_opened)>0?` · geöffnet ${fmt(r.amount_opened)}`:''}`;
+}
+function updateConsumeStockFromInput(){
+  const value=$('#consumeProduct')?.value?.trim();
+  if(!value){setConsumeStockInfo(null);return}
+  const lower=value.toLowerCase();
+  const p=state.products.find(x=>String(x.id)===value||String(x.name||'').toLowerCase()===lower);
+  setConsumeStockInfo(p||null);
+}
 
 function renderStock(){
   const q=$('#stockSearch').value.trim().toLowerCase(); const now=today();
@@ -174,7 +190,7 @@ async function testServer(){const c={id:'server',baseUrl:normalizeUrl($('#server
 function nav(view){$$('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===view));$$('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===view));const titles={stock:'Artikel',shopping:'Einkauf',consume:'Verbrauch',inventory:'Inventur',more:'Mehr'};$('#viewTitle').textContent=titles[view];localStorage.setItem('lastView',view);if(view==='inventory')renderInventory()}
 
 async function handleSheetClick(e){
-  const a=e.target.closest('[data-action]');if(a){const id=n(a.dataset.id),p=productById(id);if(a.dataset.action==='purchase'){openPurchase(p.name)}if(a.dataset.action==='consume'){$('#sheet').close();nav('consume');$('#consumeProduct').value=p.name}if(a.dataset.action==='shopping'){await provider.addShopping(id,1);$('#sheet').close();await refreshAll();toast('Zur Einkaufsliste hinzugefügt')}if(a.dataset.action==='edit'){openProduct();setTimeout(()=>{$('#editProductSelect').value=id;$('#editProductSelect').dispatchEvent(new Event('change'))},0)}return}
+  const a=e.target.closest('[data-action]');if(a){const id=n(a.dataset.id),p=productById(id);if(a.dataset.action==='purchase'){openPurchase(p.name)}if(a.dataset.action==='consume'){$('#sheet').close();nav('consume');$('#consumeProduct').value=p.name;setConsumeStockInfo(p)}if(a.dataset.action==='shopping'){await provider.addShopping(id,1);$('#sheet').close();await refreshAll();toast('Zur Einkaufsliste hinzugefügt')}if(a.dataset.action==='edit'){openProduct();setTimeout(()=>{$('#editProductSelect').value=id;$('#editProductSelect').dispatchEvent(new Event('change'))},0)}return}
   if(e.target.id==='doPurchase'){const root=$('#sheetBody'),p=await provider.resolveProduct($('[name=product]',root).value);if(!p)throw new Error('Artikel nicht gefunden.');await provider.add(p.id,$('[name=amount]',root).value,{price:$('[name=price]',root).value,best_before_date:$('[name=best_before_date]',root).value,location_id:$('[name=location_id]',root).value});$('#sheet').close();await refreshAll();toast('Einkauf gebucht')}
   if(e.target.id==='doTransfer'){const root=$('#sheetBody'),p=await provider.resolveProduct($('[name=product]',root).value);if(!p)throw new Error('Artikel nicht gefunden.');await provider.transfer(p.id,$('[name=amount]',root).value,$('[name=location_from]',root).value,$('[name=location_to]',root).value);$('#sheet').close();await refreshAll();toast('Umlagerung gebucht')}
   if(e.target.id==='saveProduct'){const id=n($('#editProductSelect').value),data={name:$('#editName').value.trim(),min_stock_amount:n($('#editMin').value),location_id:n($('#edit_location').value),qu_id_stock:n($('#editUnit').value),active:1,default_best_before_days:0,qu_factor_purchase_to_stock:1};if(!data.name)throw new Error('Name fehlt.');if(state.mode==='local')data.barcode=$('#editBarcode').value.trim();if(id)await provider.updateProduct(id,data);else{if(state.mode==='server'){data.qu_id_purchase=data.qu_id_stock;data.qu_id_consume=data.qu_id_stock}else data.barcode=$('#editBarcode').value.trim();const r=await provider.createProduct(data);if(state.mode==='server'&&$('#editBarcode').value.trim()&&r?.created_object_id)await provider.raw('/objects/product_barcodes','POST',{product_id:r.created_object_id,barcode:$('#editBarcode').value.trim(),qu_id:data.qu_id_stock,amount:1})}$('#sheet').close();await refreshAll();toast('Artikel gespeichert')}
@@ -193,7 +209,7 @@ document.addEventListener('click',async e=>{try{
   const open=e.target.closest('[data-open-sheet]');if(open){({purchase:openPurchase,transfer:openTransfer,product:openProduct,settings:openSettings,backup:openBackup,api:openApi}[open.dataset.openSheet])();return}
   if(e.target.id==='quickAddBtn'){if($('.view.active').dataset.view==='shopping')showSheet('Zur Einkaufsliste',`<div class="form-stack">${productSelect()}<label>Menge<input name="amount" type="number" value="1" min="0.001" step="0.001"></label><button type="button" class="primary-button" id="quickShoppingAdd">Hinzufügen</button></div>`);else openPurchase();return}
   if(e.target.id==='quickShoppingAdd'){const p=await provider.resolveProduct($('[name=product]',$('#sheetBody')).value);if(!p)throw new Error('Artikel nicht gefunden.');await provider.addShopping(p.id,$('[name=amount]',$('#sheetBody')).value);$('#sheet').close();await refreshAll();toast('Hinzugefügt');return}
-  if(e.target.id==='consumeBtn'){const btn=e.target;if(btn.disabled)return;btn.disabled=true;const oldText=btn.textContent;btn.textContent='Buche …';try{const p=await provider.resolveProduct($('#consumeProduct').value);if(!p)throw new Error('Artikel nicht gefunden.');const amount=$('#consumeAmount').value,mode=$('#consumeMode').value;if(mode==='open')await provider.open(p.id,amount);else await provider.consume(p.id,amount,mode==='spoiled');await refreshAll();toast('Buchung gespeichert')}finally{btn.disabled=false;btn.textContent=oldText}return}
+  if(e.target.id==='consumeBtn'){const btn=e.target;if(btn.disabled)return;btn.disabled=true;const oldText=btn.textContent;btn.textContent='Buche …';try{const p=await provider.resolveProduct($('#consumeProduct').value);if(!p)throw new Error('Artikel nicht gefunden.');setConsumeStockInfo(p);const amount=$('#consumeAmount').value,mode=$('#consumeMode').value;if(mode==='open')await provider.open(p.id,amount);else await provider.consume(p.id,amount,mode==='spoiled');await refreshAll();const r=stockForProduct(p.id),unit=r.quantity_unit_stock||unitFor(p);setConsumeStockInfo(p);toast(`Buchung gespeichert · Lagerstand ${fmt(r.amount)}${unit?' '+unit:''}`)}finally{btn.disabled=false;btn.textContent=oldText}return}
   if(e.target.id==='refreshJournal'){state.journal=await provider.journal();renderJournal();return}
   if(e.target.id==='saveInventoryBtn'){const changed=$$('[data-inventory-id]').map(i=>({id:n(i.dataset.inventoryId),newAmount:n(i.value),old:n(state.stock.find(r=>n(r.product_id)===n(i.dataset.inventoryId))?.amount)})).filter(x=>x.newAmount!==x.old);if(!changed.length){toast('Keine Änderungen');return}if(!confirm(`${changed.length} Bestände aktualisieren?`))return;for(const x of changed)await provider.inventory(x.id,x.newAmount);await refreshAll();toast('Inventur gespeichert');return}
   const c=e.target.closest('[data-shop-check]');if(c){const it=state.shopping.find(x=>n(x.id)===n(c.dataset.shopCheck));if(state.mode==='server'){if(c.checked&&it){await provider.removeShoppingProduct(it.product_id,it.amount,it.shopping_list_id||1);await refreshAll();toast('Von Einkaufsliste entfernt')}}else{await provider.updateShopping(n(c.dataset.shopCheck),{done:c.checked?1:0});await refreshAll()}return}
@@ -225,7 +241,7 @@ document.addEventListener('change',async e=>{try{
   if(e.target.id==='editProductSelect'){const id=n(e.target.value),p=productById(id);$('#deleteProduct').hidden=!id;$('#editName').value=p?.name||'';$('#editMin').value=p?.min_stock_amount||0;$('#editBarcode').value=p?.barcode||'';if(p?.location_id)$('#edit_location').value=p.location_id;if(p?.qu_id_stock)$('#editUnit').value=p.qu_id_stock}
   if(e.target.matches('[data-shop-amount]')){await provider.updateShopping(n(e.target.dataset.shopAmount),{amount:n(e.target.value)});await refreshAll()}
 }catch(err){toast(err.message)}});
-$('#stockSearch').addEventListener('input',renderStock);$('#shoppingSearch').addEventListener('input',renderShopping);
+$('#stockSearch').addEventListener('input',renderStock);$('#shoppingSearch').addEventListener('input',renderShopping);$('#consumeProduct').addEventListener('input',updateConsumeStockFromInput);$('#consumeProduct').addEventListener('change',updateConsumeStockFromInput);
 $('#stockList').addEventListener('keydown',e=>{
   const card=e.target.closest('[data-product-id]');
   if(card && (e.key==='Enter' || e.key===' ')){
@@ -264,6 +280,7 @@ function runSwipeAction(productId,direction){
       nav('consume');
       $('#consumeProduct').value=p.name;
       $('#consumeAmount').value='1';
+      setConsumeStockInfo(p);
       // Force a new hit-test/layout frame before accepting the next tap.
       requestAnimationFrame(()=>requestAnimationFrame(()=>{postSwipeBusy=false;}));
       toast('Verbrauchen');
